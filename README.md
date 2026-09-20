@@ -1,1 +1,1 @@
-# grounded_qa
+**[Grounded Q&A over Privacy Regulation](#)** — RAG with a published eval harness Hybrid retrieval (BM25 + dense, RRF) · cross-encoder reranking · grounded citations. Ablation study across 5 pipeline configurations on a 60-case golden set. `Python` `Qdrant` `Ragas` `Langfuse` `FastAPI`
