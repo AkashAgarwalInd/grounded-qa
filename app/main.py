@@ -5,6 +5,7 @@ from fastapi import FastAPI
 from pydantic import BaseModel, Field
 
 from app.config import settings
+from app.retrieve import dense_search
 
 # Fields that must never be echoed back to a client.
 SECRET_FIELDS = {"llm_api_key"}
@@ -33,9 +34,17 @@ class AskRequest(BaseModel):
     question: str = Field(min_length=1, max_length=2000)
 
 
+class CitationSnippet(BaseModel):
+    doc_id: str
+    section: str
+    text: str
+    score: float
+
+
 class AskResponse(BaseModel):
     answer: str
     citations: list[str] = []
+    passages: list[CitationSnippet] = []
     config: dict
 
 
@@ -44,7 +53,7 @@ async def health() -> dict:
     """Liveness plus a best-effort Qdrant check.
 
     Always returns 200 while the API is up; the Qdrant field tells you whether
-    the vector store is reachable. (Compose "done when": 200 here and Qdrant on 6333.)
+    the vector store is reachable.
     """
     try:
         r = await app.state.http.get(f"{settings.qdrant_url}/healthz")
@@ -56,10 +65,32 @@ async def health() -> dict:
 
 @app.post("/ask", response_model=AskResponse)
 async def ask(req: AskRequest) -> AskResponse:
-    """Stub. Real pipeline (rewrite -> retrieve -> rerank -> synthesise -> validate)
-    lands on Days 2-7, each stage gated by a switch in app/config.py."""
+    """Config A Baseline: Naive dense retrieval directly from Qdrant.
+    
+    Returns raw passages and citations without LLM synthesis.
+    """
+    # 1. Retrieve top-k passages using dense search baseline
+    raw_passages = await dense_search(req.question, k=settings.final_k)
+
+    # 2. Extract formatted citation identifiers (e.g., "dpdp_act_2023 - Sec. 1")
+    citation_labels = [
+        f"{p['doc_id']} - §{p['section']}" for p in raw_passages
+    ]
+
+    # 3. Map retrieved points to response model
+    passage_models = [
+        CitationSnippet(
+            doc_id=p["doc_id"],
+            section=p["section"],
+            text=p["text"],
+            score=p["score"],
+        )
+        for p in raw_passages
+    ]
+
     return AskResponse(
-        answer=f"[stub] pipeline not implemented yet. You asked: {req.question}",
-        citations=[],
+        answer=f"[Config A Baseline] Retrieved {len(raw_passages)} passages using dense vector search.",
+        citations=citation_labels,
+        passages=passage_models,
         config=public_config(),
     )

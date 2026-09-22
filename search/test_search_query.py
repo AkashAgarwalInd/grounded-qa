@@ -1,4 +1,3 @@
-# app/search/test_search_query.py
 import sys
 import pathlib
 
