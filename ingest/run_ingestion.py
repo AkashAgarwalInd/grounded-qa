@@ -1,21 +1,23 @@
 import json
 import pathlib
 import numpy as np
-from chunk import fixed_chunks
-from embed import embed
+from app.config import settings
+from .chunk import fixed_chunks
+from .embed import embed
+from .index_chunks_to_qdrant import index_chunks_to_qdrant
 
-MODEL_NAME = "BAAI/bge-small-en-v1.5"
 DATA_FILES = [
     "data/clean/ccpa_civ_code_downloaded.jsonl",
     "data/clean/dpdp_act_2023.jsonl",
     "data/clean/gdpr.jsonl",
 ]
 
+
 def load_jsonl(file_path: str) -> list[dict]:
     """Loads JSONL records into a list of dicts."""
     records = []
     path = pathlib.Path(file_path)
-    
+
     if not path.exists():
         print(f"[SKIP] File not found: {file_path}")
         return records
@@ -30,35 +32,47 @@ def load_jsonl(file_path: str) -> list[dict]:
                 records.append(record)
             except json.JSONDecodeError as e:
                 print(f"[ERR] Invalid JSON on line {line_num} in {file_path}: {e}")
-                
+
     print(f"[LOADED] {len(records)} records from {file_path}")
     return records
 
 
 def main():
-    all_chunks = []
-
-    # 1. Load and Chunk
+    # Step 1: Load raw JSONL records from all data sources
+    all_records = []
     for file_path in DATA_FILES:
         records = load_jsonl(file_path)
-        if not records:
-            continue
-            
-        chunks = fixed_chunks(records, size=512, overlap=64)
-        all_chunks.extend(chunks)
+        all_records.extend(records)
 
-    print(f"\n[TOTAL CHUNKS] Generated {len(all_chunks)} chunks.")
+    print(f"\n[TOTAL RECORDS] Loaded {len(all_records)} raw records.")
 
-    if not all_chunks:
-        print("[WARNING] Zero chunks produced. If your text records are shorter than 50 characters, adjust 'len(piece) < 50' in ingest/chunk.py.")
+    if not all_records:
+        print("[ERROR] No records found to process. Stopping.")
         return
 
-    # 2. Extract Text & Embed
-    chunk_texts = [c["text"] for c in all_chunks]
-    vectors = embed(chunk_texts, model_name=MODEL_NAME)
+    # Step 2: Chunk documents based on configured chunker strategy
+    all_chunks = fixed_chunks(all_records, size=512, overlap=64)
+    print(f"[CHUNKED] Generated {len(all_chunks)} text chunks.")
 
-    print(f"\n[DONE] Matrix shape: {vectors.shape}")
-    print(f"Successfully generated/loaded {len(vectors)} vectors for downstream search.")
+    if not all_chunks:
+        print("[ERROR] Zero chunks produced. Please check your raw text records.")
+        return
+
+    # Step 3: Extract texts and generate/fetch cached dense embeddings
+    chunk_texts = [c["text"] for c in all_chunks]
+    
+    # embed() automatically checks .cache/embeddings/ based on content hash + model_name
+    vectors = embed(chunk_texts, model_name=settings.embed_model)
+    print(f"[VECTORS READY] Matrix shape: {vectors.shape}")
+
+    # Step 4: Strict validation check before indexing
+    assert len(all_chunks) == vectors.shape[0], (
+        f"Length Mismatch: {len(all_chunks)} chunks vs {vectors.shape[0]} vectors."
+    )
+
+    # Step 5: Index vectors and chunk metadata directly into Qdrant
+    print(f"\n[QDRANT INDEX] Target collection: '{settings.collection_name}'")
+    index_chunks_to_qdrant(all_chunks, vectors)
 
 
 if __name__ == "__main__":
