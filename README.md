@@ -70,3 +70,14 @@ cp .env.example .env
 docker compose up --build -d
 ```
 
+
+GEMINI_API_KEY={} PYTHONPATH=. uv run python app/run_rag.py
+
+[CACHE HIT] Loaded 1 vectors from .cache/embeddings/9605dd2fe1346f00.npy
+Direct use of automatic function calling (AFC) in Models.generate_content is not recommended. Instead, we recommend to use AFC in Chat.send_message. Similarly, direct use of AFC in Models.generate_content_stream is not recommended. Instead, we recommend to use AFC in Chat.send_message_stream.
+Question: What are the duties of a data fiduciary regarding security safeguards?
+
+Grounded Answer:
+Based on the provided passages, a Data Fiduciary has the following duty regarding security safeguards:
+
+* "A Data Fiduciary shall protect personal data in its possession or under its control, including in respect of any processing undertaken by it or on its behalf by a Data Processor, by taking reasonable security safeguards to prevent personal data breach." [Sec. 1, Sec. 1]
