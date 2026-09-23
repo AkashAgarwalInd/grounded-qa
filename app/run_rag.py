@@ -4,20 +4,22 @@ app/run_rag.py
 
 import asyncio
 from search.retrieve import retrieve_passages
-from app.synthesise import synthesise
+from app.synthesise import synthesise, GroundedAnswer
 
 
 async def main():
     question = "What are the duties of a data fiduciary regarding security safeguards?"
 
-    # 1. Await the async retrieval function
     passages = await retrieve_passages(question, top_k=5)
 
-    # 2. Call synthesis with the resolved list of passages
-    answer = synthesise(question=question, passages=passages)
+    # Returns GroundedAnswer instance (Pydantic model)
+    result: GroundedAnswer = synthesise(question=question, passages=passages)
 
-    print(f"Question: {question}\n")
-    print(f"Grounded Answer:\n{answer}")
+    print(f"Sufficient Context: {result.sufficient_context}")
+    print(f"Answer: {result.answer}\n")
+    print("Citations:")
+    for c in result.citations:
+        print(f" - [{c.doc_id} | {c.section}]: \"{c.quote}\"")
 
 
 if __name__ == "__main__":

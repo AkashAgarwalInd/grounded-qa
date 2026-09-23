@@ -81,3 +81,14 @@ Grounded Answer:
 Based on the provided passages, a Data Fiduciary has the following duty regarding security safeguards:
 
 * "A Data Fiduciary shall protect personal data in its possession or under its control, including in respect of any processing undertaken by it or on its behalf by a Data Processor, by taking reasonable security safeguards to prevent personal data breach." [Sec. 1, Sec. 1]
+
+
+
+PYTHONPATH=. uv run python app/run_rag.py (With Schema)
+[CACHE HIT] Loaded 1 vectors from .cache/embeddings/9605dd2fe1346f00.npy
+
+Sufficient Context: True
+Answer: A Data Fiduciary is required to protect personal data in its possession or under its control—including any processing done by it or on its behalf by a Data Processor—by implementing appropriate technical and organisational measures and taking reasonable security safeguards to prevent personal data breaches.
+
+Citations:
+ - [dpdp_act_2023 | Sec. 1]: "A Data Fiduciary shall implement appropriate technical and organisational measures to ensure effective observance of the provisions of this Act and the rules made thereunder. (5) A Data Fiduciary shall protect personal data in its possession or under its control, including in respect of any processing undertaken by it or on its behalf by a Data Processor, by taking reasonable security safeguards to prevent personal data breach."
