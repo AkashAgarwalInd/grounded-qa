@@ -17,8 +17,14 @@ from pydantic import BaseModel, Field
 PROMPT_PATH = pathlib.Path(__file__).resolve().parent.parent / "prompts" / "synthesis_v1.txt"
 SYSTEM_PROMPT = PROMPT_PATH.read_text().strip()
 
-# Initialize Google GenAI Client
-client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
+# Initialize Google GenAI Client - with graceful fallback if no API key
+api_key = os.environ.get("GEMINI_API_KEY")
+if api_key:
+    client = genai.Client(api_key=api_key)
+else:
+    client = None
+    import loguru
+    loguru.logger.warning("No GEMINI_API_KEY set - synthesis will be disabled")
 
 
 class Citation(BaseModel):
@@ -113,6 +119,18 @@ def synthesise(
     Calls Gemini Flash to generate a typed answer and validates grounding.
     Returns a tuple of (GroundedAnswer, list_of_grounding_errors).
     """
+    if client is None:
+        # No API key available - return unanswerable result
+        from app.synthesise import GroundedAnswer
+        return (
+            GroundedAnswer(
+                answer="",
+                citations=[],
+                sufficient_context=False,
+            ),
+            ["No API key available - LLM synthesis disabled"],
+        )
+
     user_content = build_user_prompt(question, passages)
 
     response = client.models.generate_content(

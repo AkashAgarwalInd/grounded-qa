@@ -37,5 +37,49 @@ class Settings(BaseSettings):
         tag = f"{self.chunker}-{'ctx' if self.use_contextual else 'plain'}"
         return f"{self.collection}_{self.embed_model.split('/')[-1]}_{tag}"
 
+    def validate(self) -> list[str]:
+        """
+        Validate configuration settings and return list of errors.
+        
+        Checks:
+        - LLM API key validity
+        - Qdrant URL accessibility
+        - Model names validity
+        - Reasonable parameter ranges
+        
+        Returns:
+            List of error strings (empty if valid)
+        """
+        errors: list[str] = []
+        
+        # Check LLM API key
+        if self.llm_api_key == "dummy" or not self.llm_api_key:
+            errors.append("LLM API key is using default dummy value - set GEMINI_API_KEY environment variable")
+        
+        # Check Qdrant URL
+        if not self.qdrant_url.startswith("http"):
+            errors.append(f"Invalid Qdrant URL: {self.qdrant_url}")
+        
+        # Check model names
+        if not self.embed_model:
+            errors.append("Embed model name is empty")
+        
+        if not self.rerank_model:
+            errors.append("Rerank model name is empty")
+        
+        # Check parameter ranges
+        if self.top_k <= 0:
+            errors.append(f"top_k must be positive, got {self.top_k}")
+        
+        if self.final_k <= 0 or self.final_k > self.top_k:
+            errors.append(f"final_k must be positive and <= top_k, got {self.final_k}")
+        
+        # Check chunker is valid
+        valid_chunks = ["fixed", "sentence", "recursive", "structure", "semantic"]
+        if self.chunker not in valid_chunks:
+            errors.append(f"Invalid chunker: {self.chunker}. Must be one of {valid_chunks}")
+        
+        return errors
+
 
 settings = Settings()

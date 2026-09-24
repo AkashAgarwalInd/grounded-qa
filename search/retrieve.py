@@ -3,6 +3,11 @@ search/retrieve.py - Unified retrieval module for RAG pipeline.
 
 Provides dense vector search, BM25 hybrid search, and optional reranking.
 All retrieval configurations (Config A-D) are controlled via app.config switches.
+
+This module consolidates the duplicate retrieval logic that previously existed
+in both app/retrieve.py and search/retrieve.py. The canonical retrieval logic
+now lives in app/retrieve.py; this file provides synchronous fallbacks and
+backward-compatible wrappers.
 """
 
 from __future__ import annotations
@@ -13,12 +18,7 @@ from typing import List, Dict, Any
 from qdrant_client import AsyncQdrantClient, QdrantClient, models as qm
 
 from app.config import settings
-from ingest.embed import embed
-
-
-# Initialize clients using settings
-sync_qdrant_client = QdrantClient(url=settings.qdrant_url)
-async_qdrant_client = AsyncQdrantClient(url=settings.qdrant_url)
+from app.retrieve import dense_search, hybrid_search, bm25_search, rrf_fuse
 
 
 async def retrieve_passages(
@@ -36,21 +36,10 @@ async def retrieve_passages(
     Returns:
         List of passage dictionaries with chunk_id, doc_id, section, text, score
     """
-    # 1. Generate query embedding
-    query_vector = await asyncio.to_thread(
-        embed, [question], model_name=settings.embed_model
+    # Use the unified hybrid_search from app.retrieve for density+BM25 fusion
+    passages = await hybrid_search(
+        question, top_k=top_k, use_bm25=use_bm25, rrf=True
     )
-    query_vector = query_vector[0]
-
-    # 2. Determine search strategy based on config switches
-    if use_bm25:
-        # Config B: BM25 hybrid search
-        # TODO: Full BM25 integration - for now fall back to dense search
-        # with note that BM25 will be integrated in Phase 2
-        passages = await dense_search(question, k=top_k)
-    else:
-        # Config A: Dense-only vector retrieval
-        passages = await dense_search(question, k=top_k)
 
     # 3. Apply Cross-Encoder reranking if enabled (Config C/D)
     if use_rerank and passages:
@@ -92,7 +81,8 @@ async def _rerank_passages(
     candidates = passages[:candidate_limit]
 
     try:
-        client = genai.Client(api_key=__import__("os").environ.get("GEMINI_API_KEY"))
+        import os
+        client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
 
         # Build reranking prompt with query and passage texts
         passage_texts = []
@@ -145,10 +135,12 @@ def retrieve_passages_sync(
     Returns:
         List of passage dictionaries
     """
-    # 1. Generate query embedding (synchronous)
+    # Use sync version of dense search
+    from app.retrieve import embed
+
     query_vector = embed([question], model_name=settings.embed_model)[0]
 
-    # 2. Basic dense search (sync version)
+    # Basic dense search (sync version)
     response = sync_qdrant_client.query_points(
         collection_name=settings.collection_name,
         query=query_vector.tolist(),
@@ -163,7 +155,7 @@ def retrieve_passages_sync(
         ),
     )
 
-    # 3. Format hits
+    # Format hits
     passages = []
     for point in response.points:
         payload = point.payload or {}
@@ -175,7 +167,13 @@ def retrieve_passages_sync(
             "score": round(float(point.score), 4),
         })
 
-    # 4. Apply reranking if enabled (sync simple version)
+    # Apply BM25 if enabled but no fusion (standalone BM25)
+    if use_bm25 and not passages:
+        # Try to get BM25 results
+        bm25_results = bm25_search(question, top_k=top_k)
+        passages = bm25_results
+
+    # Apply reranking if enabled (sync simple version)
     if use_rerank and passages:
         passages = _rerank_passages_sync(question, passages)
 
