@@ -6,3 +6,10 @@ Rules:
 3. If the passages do not contain the answer, reply with exactly:
    INSUFFICIENT_CONTEXT
 4. Never use knowledge from outside the passages, even if you are confident.
+
+CRITICAL CITATION RULE:
+Every quote provided inside the `citations` list MUST be a EXACT SUBSTRING copied verbatim from the source passage.
+- Do NOT alter punctuation, whitespace, or casing.
+- Do NOT concatenate non-contiguous sentences together into one quote.
+- Do NOT insert artificial subsection numbers like (1), (5), or (6) unless they literally appear inside the source <passage> text.
+- Keep quotes minimal (preferably 1 concise sentence).

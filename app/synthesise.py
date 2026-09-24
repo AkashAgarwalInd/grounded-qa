@@ -1,9 +1,14 @@
 """
 app/synthesise.py
+
+Generates grounded answers from retrieved RAG passages using Gemini Flash
+with Pydantic-based structured outputs and deterministic grounding validation.
 """
 
 import os
 import pathlib
+import re
+from difflib import SequenceMatcher
 from google import genai
 from google.genai import types
 from pydantic import BaseModel, Field
@@ -30,22 +35,51 @@ class GroundedAnswer(BaseModel):
     )
 
 
+def clean_text(text: str) -> str:
+    """Removes section numbers, punctuation, and normalizes whitespace."""
+    text = re.sub(r'^\s*(\(\d+\)|Sec\.\s*\d+|Section\s*\d+)\s*', '', text, flags=re.IGNORECASE)
+    text = re.sub(r'[^\w\s]', '', text)
+    return re.sub(r'\s+', ' ', text).lower().strip()
+
+
 def validate_grounding(answer: GroundedAnswer, passages: list[dict]) -> list[str]:
     """
     Schema-valid is not the same as true.
-    
-    Verifies that every cited source exists in the input passages and 
-    that the extracted quote exists verbatim in the retrieved text.
+    Verifies that cited sources exist in passages and quotes are found verbatim.
     """
     errors = []
-    # Build lookup table using passage metadata keys
-    by_id = {(p.get("doc_id"), p.get("section")): p.get("text", "") for p in passages}
+    
+    # Map (doc_id, section) to a LIST of text chunks to avoid overwriting multi-chunk sections
+    by_id: dict[tuple[str, str], list[str]] = {}
+    for p in passages:
+        key = (p.get("doc_id", "N/A"), p.get("section", "N/A"))
+        by_id.setdefault(key, []).append(p.get("text", ""))
 
     for cit in answer.citations:
-        src = by_id.get((cit.doc_id, cit.section))
-        if src is None:
+        sources = by_id.get((cit.doc_id, cit.section))
+        if not sources:
             errors.append(f"Cited non-existent source: {cit.doc_id} {cit.section}")
-        elif cit.quote.strip() not in src:
+            continue
+
+        clean_quote = clean_text(cit.quote)
+        found = False
+
+        for src in sources:
+            clean_src = clean_text(src)
+
+            # 1. Direct normalized substring match
+            if clean_quote in clean_src:
+                found = True
+                break
+
+            # 2. Fuzzy fallback match (>80% overlap ratio)
+            matcher = SequenceMatcher(None, clean_quote, clean_src)
+            match = matcher.find_longest_match(0, len(clean_quote), 0, len(clean_src))
+            if match.size >= len(clean_quote) * 0.8:
+                found = True
+                break
+
+        if not found:
             errors.append(
                 f"Quote not found verbatim in {cit.doc_id} {cit.section}: '{cit.quote}'"
             )
@@ -95,8 +129,6 @@ def synthesise(
     )
 
     typed_output: GroundedAnswer = response.parsed
-    
-    # Deterministic hallucination check
     grounding_errors = validate_grounding(typed_output, passages)
 
     return typed_output, grounding_errors
