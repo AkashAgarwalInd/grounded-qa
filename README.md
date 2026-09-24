@@ -92,3 +92,12 @@ Answer: A Data Fiduciary is required to protect personal data in its possession 
 
 Citations:
  - [dpdp_act_2023 | Sec. 1]: "A Data Fiduciary shall implement appropriate technical and organisational measures to ensure effective observance of the provisions of this Act and the rules made thereunder. (5) A Data Fiduciary shall protect personal data in its possession or under its control, including in respect of any processing undertaken by it or on its behalf by a Data Processor, by taking reasonable security safeguards to prevent personal data breach."
+
+Sufficient Context: True (With Grounding)
+Answer:
+A Data Fiduciary must protect personal data in its possession or under its control—including any processing undertaken by it or on its behalf by a Data Processor—by implementing appropriate technical and organisational measures to ensure effective observance of the Act and by taking reasonable security safeguards to prevent personal data breaches. In the event of a personal data breach, the Data Fiduciary is required to notify the Board and each affected Data Principal in the prescribed form and manner.
+
+Citations:
+ - [dpdp_act_2023 | Sec. 1]: "A Data Fiduciary shall implement appropriate technical and organisational measures to ensure effective observance of the provisions of this Act and the rules made thereunder. (5) A Data Fiduciary shall protect personal data in its possession or under its control, including in respect of any processing undertaken by it or on its behalf by a Data Processor, by taking reasonable security safeguards to prevent personal data breach. (6) In the event of a personal data breach, the Data Fiduciary shall give the Board and each affected Data Principal, intimation of such breach in such form and manner as may be prescribed."
+🚨 GROUNDING / HALLUCINATION ERRORS DETECTED:
+  - Quote not found verbatim in dpdp_act_2023 Sec. 1: 'A Data Fiduciary shall implement appropriate technical and organisational measures to ensure effective observance of the provisions of this Act and the rules made thereunder. (5) A Data Fiduciary shall protect personal data in its possession or under its control, including in respect of any processing undertaken by it or on its behalf by a Data Processor, by taking reasonable security safeguards to prevent personal data breach. (6) In the event of a personal data breach, the Data Fiduciary shall give the Board and each affected Data Principal, intimation of such breach in such form and manner as may be prescribed.'

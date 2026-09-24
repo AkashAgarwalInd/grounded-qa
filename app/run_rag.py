@@ -12,14 +12,20 @@ async def main():
 
     passages = await retrieve_passages(question, top_k=5)
 
-    # Returns GroundedAnswer instance (Pydantic model)
-    result: GroundedAnswer = synthesise(question=question, passages=passages)
+    result, grounding_errors = synthesise(question=question, passages=passages)
 
     print(f"Sufficient Context: {result.sufficient_context}")
-    print(f"Answer: {result.answer}\n")
+    print(f"Answer:\n{result.answer}\n")
     print("Citations:")
     for c in result.citations:
         print(f" - [{c.doc_id} | {c.section}]: \"{c.quote}\"")
+
+    if grounding_errors:
+        print("🚨 GROUNDING / HALLUCINATION ERRORS DETECTED:")
+        for err in grounding_errors:
+            print(f"  - {err}")
+    else:
+        print("✅ VERIFIED: All citations resolve verbatim to source chunks.")
 
 
 if __name__ == "__main__":

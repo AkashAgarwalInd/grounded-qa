@@ -1,8 +1,5 @@
 """
 app/synthesise.py
-
-Generates grounded answers from retrieved RAG passages using Gemini Flash
-with Pydantic-based structured outputs.
 """
 
 import os
@@ -19,7 +16,6 @@ SYSTEM_PROMPT = PROMPT_PATH.read_text().strip()
 client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
 
 
-# Define structured response schemas using Pydantic
 class Citation(BaseModel):
     doc_id: str = Field(description="Document ID (e.g., dpdp_act_2023)")
     section: str = Field(description="Section identifier (e.g., Sec. 1)")
@@ -32,6 +28,29 @@ class GroundedAnswer(BaseModel):
     sufficient_context: bool = Field(
         description="False if the provided context did not contain enough info to answer"
     )
+
+
+def validate_grounding(answer: GroundedAnswer, passages: list[dict]) -> list[str]:
+    """
+    Schema-valid is not the same as true.
+    
+    Verifies that every cited source exists in the input passages and 
+    that the extracted quote exists verbatim in the retrieved text.
+    """
+    errors = []
+    # Build lookup table using passage metadata keys
+    by_id = {(p.get("doc_id"), p.get("section")): p.get("text", "") for p in passages}
+
+    for cit in answer.citations:
+        src = by_id.get((cit.doc_id, cit.section))
+        if src is None:
+            errors.append(f"Cited non-existent source: {cit.doc_id} {cit.section}")
+        elif cit.quote.strip() not in src:
+            errors.append(
+                f"Quote not found verbatim in {cit.doc_id} {cit.section}: '{cit.quote}'"
+            )
+
+    return errors
 
 
 def build_user_prompt(question: str, passages: list[dict]) -> str:
@@ -55,9 +74,10 @@ def build_user_prompt(question: str, passages: list[dict]) -> str:
 
 def synthesise(
     question: str, passages: list[dict], model: str = "gemini-3.5-flash-lite"
-) -> GroundedAnswer:
+) -> tuple[GroundedAnswer, list[str]]:
     """
-    Calls Gemini Flash with structured output validation returning a typed GroundedAnswer.
+    Calls Gemini Flash to generate a typed answer and validates grounding.
+    Returns a tuple of (GroundedAnswer, list_of_grounding_errors).
     """
     user_content = build_user_prompt(question, passages)
 
@@ -74,6 +94,9 @@ def synthesise(
         ),
     )
 
-    # Automatically validated against GroundedAnswer schema by google-genai
     typed_output: GroundedAnswer = response.parsed
-    return typed_output
+    
+    # Deterministic hallucination check
+    grounding_errors = validate_grounding(typed_output, passages)
+
+    return typed_output, grounding_errors
