@@ -3,14 +3,30 @@ app/run_rag.py
 """
 
 import asyncio
-from search.retrieve import retrieve_passages
+from app.config import settings
+from app.retrieve import dense_search
 from app.synthesise import synthesise, GroundedAnswer
 
 
 async def main():
     question = "What are the duties of a data fiduciary regarding security safeguards?"
 
-    passages = await retrieve_passages(question, top_k=5)
+    # Config toggles from settings - can be overridden at runtime
+    use_bm25 = getattr(settings, "use_bm25", False)
+    use_rerank = getattr(settings, "use_rerank", False)
+
+    passages = await dense_search(question, k=settings.top_k)
+
+    # Apply config switches
+    if use_bm25:
+        # BM25 hybrid search - placeholder, full integration in Phase 2
+        print("[INFO] BM25 hybrid search enabled (Config B)")
+        # TODO: Integrate BM25 search here
+
+    if use_rerank:
+        # Cross-Encoder reranking - placeholder, full integration in Phase 4
+        print("[INFO] Cross-Encoder reranking enabled (Config C)")
+        # TODO: Integrate reranker here
 
     result, grounding_errors = synthesise(question=question, passages=passages)
 

@@ -10,6 +10,13 @@ async def dense_search(query: str, k: int = 5) -> list[dict]:
     """
     Config A: Dense-only vector retrieval using BAAI/bge-small-en-v1.5.
     No BM25 sparse matching, no reranker, no LLM query re-writer.
+
+    Args:
+        query: User query string
+        k: Number of results to retrieve
+
+    Returns:
+        List of result dictionaries with chunk_id, score, doc_id, section, text, char_start
     """
     # 1. Embed query with the SAME model and L2 normalization
     query_vector = embed([query], model_name=settings.embed_model)[0]
@@ -22,11 +29,11 @@ async def dense_search(query: str, k: int = 5) -> list[dict]:
         query_filter=qm.Filter(
             must=[
                 qm.FieldCondition(
-                    key="chunker", 
-                    match=qm.MatchValue(value=settings.chunker)
+                    key="chunker",
+                    match=qm.MatchValue(value=settings.chunker),
                 )
             ]
-        )
+        ),
     )
 
     # 3. Format hits with payload metadata for citations
@@ -39,7 +46,7 @@ async def dense_search(query: str, k: int = 5) -> list[dict]:
             "doc_id": payload.get("doc_id", "unknown"),
             "section": payload.get("section", "N/A"),
             "text": payload.get("text", ""),
-            "char_start": payload.get("char_start", 0)
+            "char_start": payload.get("char_start", 0),
         })
 
     return results
