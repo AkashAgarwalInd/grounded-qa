@@ -5,6 +5,8 @@ from app.config import settings
 from .chunk import fixed_chunks
 from .embed import embed
 from .index_chunks_to_qdrant import index_chunks_to_qdrant
+from .semantic import semantic_chunks
+from sentence_transformers import SentenceTransformer
 
 DATA_FILES = [
     "data/clean/ccpa_civ_code_downloaded.jsonl",
@@ -51,7 +53,11 @@ def main():
         return
 
     # Step 2: Chunk documents based on configured chunker strategy
-    all_chunks = fixed_chunks(all_records, size=512, overlap=64)
+    model = SentenceTransformer(settings.embed_model)
+    if settings.chunker == 'semantic':
+        all_chunks = semantic_chunks(all_records, model=model, pct=25, max_words=768)
+    else:
+        all_chunks = fixed_chunks(all_records, size=512, overlap=64)
     print(f"[CHUNKED] Generated {len(all_chunks)} text chunks.")
 
     if not all_chunks:

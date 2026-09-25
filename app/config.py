@@ -1,4 +1,11 @@
+import hashlib
+import json
+import subprocess
+import pathlib
+import datetime as dt
+from dataclasses import dataclass, asdict
 from typing import Literal
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -80,6 +87,33 @@ class Settings(BaseSettings):
             errors.append(f"Invalid chunker: {self.chunker}. Must be one of {valid_chunks}")
         
         return errors
+
+
+@dataclass(frozen=True)
+class RunConfig:
+    """Frozen dataclass mirroring runtime config flags plus git SHA and timestamp."""
+    use_bm25: bool
+    use_rerank: bool
+    chunker: str
+    use_contextual: bool
+    embed_model: str
+    top_k: int
+    final_k: int
+    golden_hash: str = ""
+
+    @property
+    def hash(self) -> str:
+        blob = json.dumps(asdict(self), sort_keys=True).encode()
+        return hashlib.sha256(blob).hexdigest()[:8]
+
+    def save(self, root: str = "runs") -> str:
+        d = pathlib.Path(root) / self.hash
+        d.mkdir(parents=True, exist_ok=True)
+        sha = subprocess.check_output(["git", "rev-parse", "--short", "HEAD"]).decode().strip()
+        (d / "config.json").write_text(json.dumps(
+            {**asdict(self), "git": sha,
+             "at": dt.datetime.now(dt.UTC).isoformat()}, indent=2))
+        return str(d)
 
 
 settings = Settings()
