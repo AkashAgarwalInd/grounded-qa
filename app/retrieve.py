@@ -1,3 +1,7 @@
+import asyncio
+import time
+import contextvars
+
 from qdrant_client import QdrantClient, models as qm
 from app.config import settings
 from ingest.embed import embed
@@ -5,6 +9,26 @@ import pathlib
 import pickle
 import loguru
 from rank_bm25 import BM25Okapi
+
+
+# ---- Per-stage timing via ContextVar (telemetry) ----
+_stages = contextvars.ContextVar('stages', default=None)
+
+
+def stage(name: str, t0: float) -> None:
+    """Record elapsed milliseconds for a named stage in the current request context."""
+    d = _stages.get()
+    if d is not None:
+        d[name] = round((time.perf_counter() - t0) * 1000, 1)
+
+
+# ---- Request-scoped staging helper for handlers ----
+def start_staging() -> None:
+    _stages.set({})
+
+
+def get_stages() -> dict | None:
+    return _stages.get()
 
 # Initialize Qdrant client from central settings
 client = QdrantClient(url=settings.qdrant_url)
@@ -194,6 +218,13 @@ async def hybrid_search(
     """
     Hybrid search combining dense vector and BM25 lexical search.
     
+    Config A (dense-only):     use_bm25=False, rrf=False
+    Config B (hybrid RRF):     use_bm25=True,  rrf=True
+    Config B no-RRF:           use_bm25=True,  rrf=False
+    
+    Key: dense + BM25 run concurrently via asyncio.gather + run_in_executor
+    so hybrid cost adds ~0 to p95 wall-clock latency.
+    
     Args:
         query: User query string
         top_k: Number of results to return
@@ -203,27 +234,38 @@ async def hybrid_search(
     Returns:
         Fused and re-ranked passage dictionaries
     """
-    # 1. Always run dense search first
-    dense_results = await dense_search(query, k=top_k * 2)  # Get more for fusion
+    t0 = time.perf_counter()
+    
+    # Always run dense search first
+    dense_task = dense_search(query, k=top_k * 2)
     
     if not use_bm25:
-        # Config A: Return dense-only results
+        # Config A: Dense-only, no BM25, no fusion
+        dense_results = await dense_task
+        stage('retrieve', t0)
         return dense_results[:top_k]
     
-    # 2. Run BM25 search
-    bm25_results = bm25_search(query, top_k * 2)
+    # Config B: Run dense + BM25 concurrently
+    # BM25 is CPU-bound (rank-bm25 scoring); push to thread executor
+    bm25_task = asyncio.get_running_loop().run_in_executor(
+        None, bm25_search, query, top_k * 2
+    )
+    
+    dense_results, bm25_results = await asyncio.gather(dense_task, bm25_task)
+    
+    stage('retrieve', t0)
     
     if not bm25_results:
-        # Fall back to dense only if BM25 has no corpus
+        # Fall back to dense only if BM25 has no corpus / no results
         return dense_results[:top_k]
     
-    # 3. Apply RRF fusion if enabled
+    # Apply RRF fusion if enabled
     if rrf:
         fused = rrf_fuse(dense_results, bm25_results, k=60)
-        # Return top_k from fused results
         return fused[:top_k]
     else:
         # Return dense results only without fusion
+        # Simple: return dense, but we could also merge without RRF here
         return dense_results[:top_k]
 
 
