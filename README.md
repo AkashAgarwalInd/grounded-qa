@@ -51,6 +51,17 @@ A containerized, production-grade Retrieval-Augmented Generation (RAG) system fo
 - **Speedup**: ~1.2x with concurrent retrieval
 - **Practical impact**: Meaningful for low-latency APIs; less critical for batch processing
 
+## Semantic Chunking Comparison
+
+| Strategy | Chunk Count | Mean Length | Length Stdev | Max Length |
+|---|---|---|---|---|
+| fixed | 581 | 121 | 163 | 512 |
+| semantic | 777 | 84 | 115 | 811 |
+
+**Key differences**: Semantic chunking produces more chunks (777 vs 581) with shorter mean length (84 vs 121 tokens), reducing length variance (stdev 115 vs 163). Fixed-size chunks respect section boundaries with larger, more variable sizes; semantic chunks break on meaning shifts while also respecting the 768-token max and never crossing section boundaries.
+
+---
+
 ## Architecture & Tech Stack
 
 * **API Layer:** FastAPI with dynamic configuration controls (`app/config.py`).
